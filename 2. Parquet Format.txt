@@ -1,0 +1,71 @@
+Parquet:
+========
+
+scala> data2020.coalesce(1).write.format("parquet").mode("overwrite").save("livia/sparksql/data2020_parquet")
+
+scala> var data2020par = spark.read.format("parquet").load("livia/sparksql/data2020_parquet")
+data2020par: org.apache.spark.sql.DataFrame = [sid: string, date: date ... 2 more fields]
+
+
+scala> data2017.coalesce(1).write.format("parquet").mode("overwrite").save("livia/sparksql/data2017_parquet")
+
+scala> var data2017par = spark.read.format("parquet").load("livia/sparksql/data2017_parquet")
+data2017par: org.apache.spark.sql.DataFrame = [sid: string, date: date ... 2 more fields]
+
+
+scala> var summary2020 = data2020par.where(col("mtype")==="TMAX").withColumn("Max_value", max("value") over(Window.partitionBy(month(col("date"))).orderBy(col("value").desc))).groupBy(year(col("date")), month(col("date"))).agg(max(col("value")).as ("ultimate_max_value")).orderBy(col("ultimate_max_value").desc)
+summary2020: org.apache.spark.sql.Dataset[org.apache.spark.sql.Row] = [year(date): int, month(date): int ... 1 more field]
+
+
+scala> summary2020.show
++----------+-----------+------------------+                                     
+|year(date)|month(date)|ultimate_max_value|
++----------+-----------+------------------+
+|      2020|          5|            2228.0|
+|      2020|          8|             656.0|
+|      2020|          1|             644.0|
+|      2020|          4|             575.0|
+|      2020|          7|             533.0|
+|      2020|          6|             500.0|
+|      2020|          3|             485.0|
+|      2020|          9|             473.0|
+|      2020|          2|             468.0|
++----------+-----------+------------------+
+
+time taken: 8 secs
+
+scala> var summary2017 = data2017par.where(col("mtype")==="TMAX").withColumn("Max_value", max("value") over(Window.partitionBy(month(col("date"))).orderBy(col("value").desc))).groupBy(year(col("date")), month(col("date"))).agg(max(col("value")).as ("ultimate_max_value")).orderBy(col("ultimate_max_value").desc)
+summary2017: org.apache.spark.sql.Dataset[org.apache.spark.sql.Row] = [year(date): int, month(date): int ... 1 more field]
+
++----------+-----------+------------------+                                     
+|year(date)|month(date)|ultimate_max_value|
++----------+-----------+------------------+
+|      2017|          5|             649.0|
+|      2017|          1|             639.0|
+|      2017|          3|             639.0|
+|      2017|          2|             617.0|
+|      2017|          6|             610.0|
+|      2017|          8|             600.0|
+|      2017|          7|             544.0|
+|      2017|          9|             501.0|
+|      2017|          4|             500.0|
++----------+-----------+------------------+
+
+time taken: 5 secs
+
+scala> val combinedmaxtmeps = summary2020.join(summary2017, summary2020("month(date)")===summary2017("month(date)")).show
++----------+-----------+------------------+----------+-----------+------------------+
+|year(date)|month(date)|ultimate_max_value|year(date)|month(date)|ultimate_max_value|
++----------+-----------+------------------+----------+-----------+------------------+
+|      2020|          1|             644.0|      2017|          1|             639.0|
+|      2020|          6|             500.0|      2017|          6|             610.0|
+|      2020|          3|             485.0|      2017|          3|             639.0|
+|      2020|          5|            2228.0|      2017|          5|             649.0|
+|      2020|          9|             473.0|      2017|          9|             501.0|
+|      2020|          4|             575.0|      2017|          4|             500.0|
+|      2020|          8|             656.0|      2017|          8|             600.0|
+|      2020|          7|             533.0|      2017|          7|             544.0|
+|      2020|          2|             468.0|      2017|          2|             617.0|
++----------+-----------+------------------+----------+-----------+------------------+
+
+Time taken: 15 secs.

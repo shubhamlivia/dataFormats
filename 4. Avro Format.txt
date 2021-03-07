@@ -1,0 +1,162 @@
+AVRO:
+====
+
+[XYZ@ip ~]$ spark2-shell --master yarn --packages com.databricks:spark-avro_2.11:3.2.0
+
+scala> var data2020 = spark.read.schema(tschema).option("dateFormat","yyyyMMdd").csv("livia/sparksql/2020.csv")
+data2020: org.apache.spark.sql.DataFrame = [sid: string, date: date ... 2 more fields]
+
+scala> import com.databricks.spark.avro._
+import com.databricks.spark.avro._
+
+
+scala> data2020.coalesce(1).write.avro("livia/sparksql/data2020_avro1")
+
+com.databricks.spark.avro.SchemaConverters$IncompatibleSchemaException: Unexpected type DateType.
+
+--Note: converted date datatype to string data type.
+
+scala> data2020.schema.printTreeString
+root
+ |-- sid: string (nullable = true)
+ |-- date: date (nullable = true)
+ |-- mtype: string (nullable = true)
+ |-- value: double (nullable = true)
+
+scala> data2020 = data2020.withColumn("date",col("date").cast(org.apache.spark.sql.types.StringType))
+data2020: org.apache.spark.sql.DataFrame = [sid: string, date: string ... 2 more fields]
+
+scala> data2020.schema.printTreeString
+root
+ |-- sid: string (nullable = true)
+ |-- date: string (nullable = true)
+ |-- mtype: string (nullable = true)
+ |-- value: double (nullable = true)
+
+scala> data2020.coalesce(1).write.mode("overwrite").avro("livia/sparksql/data2020_avro")
+
+scala> var data2020avro = spark.read.avro("livia/sparksql/data2020_avro")
+data2020avro: org.apache.spark.sql.DataFrame = [sid: string, date: string ... 2 more fields]
+
+scala> data2020avro.printSchema
+root
+ |-- sid: string (nullable = true)
+ |-- date: string (nullable = true)
+ |-- mtype: string (nullable = true)
+ |-- value: double (nullable = true)
+
+--Note: converted string datatype to date data type.
+
+scala> data2020avro = data2020avro.withColumn("date",col("date").cast(org.apache.spark.sql.types.DateType))
+data2020avro: org.apache.spark.sql.DataFrame = [sid: string, date: date ... 2 more fields]
+
+scala> data2020avro.printSchema
+root
+ |-- sid: string (nullable = true)
+ |-- date: date (nullable = true)
+ |-- mtype: string (nullable = true)
+ |-- value: double (nullable = true)
+
+scala> data2020avro.show
++-----------+----------+-----+-----+
+|        sid|      date|mtype|value|
++-----------+----------+-----+-----+
+|AE000041196|2020-01-01| TMIN|168.0|
+|AE000041196|2020-01-01| PRCP|  0.0|
+|AE000041196|2020-01-01| TAVG|211.0|
+|AEM00041194|2020-01-01| PRCP|  0.0|
+
+
+Similarly 2017 data:
+===================
+
+scala> var data2017 = spark.read.schema(tschema).option("dateFormat","yyyyMMdd").csv("livia/sparksql/2017.csv")
+data2017: org.apache.spark.sql.DataFrame = [sid: string, date: date ... 2 more fields]
+
+scala> data2017 = data2017.withColumn("date",col("date").cast(org.apache.spark.sql.types.StringType))
+data2017: org.apache.spark.sql.DataFrame = [sid: string, date: string ... 2 more fields]
+
+scala> data2017.coalesce(1).write.mode("overwrite").avro("livia/sparksql/data2017_avro")
+
+scala> var data2017avro = spark.read.avro("livia/sparksql/data2017_avro")
+data2017avro: org.apache.spark.sql.DataFrame = [sid: string, date: string ... 2 more fields]
+
+scala> data2017avro = data2017avro.withColumn("date",col("date").cast(org.apache.spark.sql.types.DateType))
+data2017avro: org.apache.spark.sql.DataFrame = [sid: string, date: date ... 2 more fields]
+
+scala> data2017avro.printSchema
+root
+ |-- sid: string (nullable = true)
+ |-- date: date (nullable = true)
+ |-- mtype: string (nullable = true)
+ |-- value: double (nullable = true)
+
+scala> data2017avro.show
++-----------+----------+-----+-----+
+|        sid|      date|mtype|value|
++-----------+----------+-----+-----+
+|AE000041196|2017-01-01| TMIN|163.0|
+|AE000041196|2017-01-01| TAVG|217.0|
+|AEM00041194|2017-01-01| PRCP|  0.0|
+|AEM00041194|2017-01-01| TAVG|223.0|
+
+
+
+
+scala> var summary2020 = data2020avro.where(col("mtype")==="TMAX").withColumn("Max_value", max("value") over(Window.partitionBy(month(col("date"))).orderBy(col("value").desc))).groupBy(year(col("date")), month(col("date"))).agg(max(col("value")).as ("ultimate_max_value")).orderBy(col("ultimate_max_value").desc)
+summary2020: org.apache.spark.sql.Dataset[org.apache.spark.sql.Row] = [year(date): int, month(date): int ... 1 more field]
+
+
+scala> summary2020.show
++----------+-----------+------------------+                                     
+|year(date)|month(date)|ultimate_max_value|
++----------+-----------+------------------+
+|      2020|          5|            2228.0|
+|      2020|          8|             656.0|
+|      2020|          1|             644.0|
+|      2020|          4|             575.0|
+|      2020|          7|             533.0|
+|      2020|          6|             500.0|
+|      2020|          3|             485.0|
+|      2020|          9|             473.0|
+|      2020|          2|             468.0|
++----------+-----------+------------------+
+
+time taken: 20 secs.
+
+scala> var summary2017 = data2017avro.where(col("mtype")==="TMAX").withColumn("Max_value", max("value") over(Window.partitionBy(month(col("date"))).orderBy(col("value").desc))).groupBy(year(col("date")), month(col("date"))).agg(max(col("value")).as ("ultimate_max_value")).orderBy(col("ultimate_max_value").desc)
+summary2017: org.apache.spark.sql.Dataset[org.apache.spark.sql.Row] = [year(date): int, month(date): int ... 1 more field]
+
+scala> summary2017.show
++----------+-----------+------------------+                                     
+|year(date)|month(date)|ultimate_max_value|
++----------+-----------+------------------+
+|      2017|          5|             649.0|
+|      2017|          1|             639.0|
+|      2017|          3|             639.0|
+|      2017|          2|             617.0|
+|      2017|          6|             610.0|
+|      2017|          8|             600.0|
+|      2017|          7|             544.0|
+|      2017|          9|             501.0|
+|      2017|          4|             500.0|
++----------+-----------+------------------+
+
+time taken: 19 secs
+
+scala> val combinedmaxtmeps = summary2020.join(summary2017, summary2020("month(date)")===summary2017("month(date)")).show
++----------+-----------+------------------+----------+-----------+------------------+
+|year(date)|month(date)|ultimate_max_value|year(date)|month(date)|ultimate_max_value|
++----------+-----------+------------------+----------+-----------+------------------+
+|      2020|          1|             644.0|      2017|          1|             639.0|
+|      2020|          6|             500.0|      2017|          6|             610.0|
+|      2020|          3|             485.0|      2017|          3|             639.0|
+|      2020|          5|            2228.0|      2017|          5|             649.0|
+|      2020|          9|             473.0|      2017|          9|             501.0|
+|      2020|          4|             575.0|      2017|          4|             500.0|
+|      2020|          8|             656.0|      2017|          8|             600.0|
+|      2020|          7|             533.0|      2017|          7|             544.0|
+|      2020|          2|             468.0|      2017|          2|             617.0|
++----------+-----------+------------------+----------+-----------+------------------+
+
+Time taken: 36 secs.

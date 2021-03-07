@@ -1,0 +1,6 @@
+CSV file format has taken 40 secs, 41 secs, 1 min 17 secs.
+Parquet file format has taken 8 secs, 5 secs, 15 secs.
+ORC file format has taken 7 secs, 8 secs, 17 secs.
+Avro file format has taken 20 secs, 19 secs, 36 secs respectively.
+
+ORC and Parquet file formats has performed quickly and returned the results in quick time. 
